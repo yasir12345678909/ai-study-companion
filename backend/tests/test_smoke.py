@@ -10,7 +10,10 @@ def token(client, email, password):
 
 def test_health_and_auth():
     with TestClient(app) as client:
-        assert client.get("/health").json()["status"] == "healthy"
+        health_resp = client.get("/health")
+        assert health_resp.json()["status"] == "healthy"
+        assert health_resp.headers["x-content-type-options"] == "nosniff"
+        assert health_resp.headers["x-frame-options"] == "DENY"
         response = client.post("/api/v1/auth/register", json={"email":"pending@example.com","password":"Password123","name":"Pending","role":"teacher"})
         assert response.status_code in (200, 409)
         access = response.json().get("access_token") if response.status_code == 200 else token(client, "pending@example.com", "Password123")
