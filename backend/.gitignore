@@ -1,0 +1,8 @@
+.env
+*.db
+*.db-shm
+*.db-wal
+chroma_db/
+uploads/
+__pycache__/
+.pytest_cache/

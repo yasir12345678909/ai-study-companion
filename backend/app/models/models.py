@@ -1,0 +1,41 @@
+import uuid,enum
+from datetime import datetime,timezone
+from sqlalchemy import String,Boolean,DateTime,ForeignKey,Integer,Text,JSON,UniqueConstraint,Enum
+from sqlalchemy.orm import DeclarativeBase,Mapped,mapped_column,relationship
+def uid(): return str(uuid.uuid4())
+def now(): return datetime.now(timezone.utc)
+class Base(DeclarativeBase): pass
+class CurriculumBoard(Base):
+    __tablename__="curriculum_boards"; id:Mapped[str]=mapped_column(String,primary_key=True); name:Mapped[str]=mapped_column(String); short_name:Mapped[str]=mapped_column(String); province:Mapped[str]=mapped_column(String)
+class CurriculumClass(Base):
+    __tablename__="curriculum_classes"; id:Mapped[str]=mapped_column(String,primary_key=True); board_id:Mapped[str]=mapped_column(ForeignKey("curriculum_boards.id",ondelete="CASCADE")); level:Mapped[int]=mapped_column(Integer); name:Mapped[str]=mapped_column(String); code:Mapped[str]=mapped_column(String)
+class CurriculumStream(Base):
+    __tablename__="curriculum_streams"; id:Mapped[str]=mapped_column(String,primary_key=True); class_id:Mapped[str]=mapped_column(ForeignKey("curriculum_classes.id",ondelete="CASCADE")); name:Mapped[str]=mapped_column(String); code:Mapped[str]=mapped_column(String); description:Mapped[str]=mapped_column(Text)
+class CurriculumCombination(Base):
+    __tablename__="curriculum_combinations"; id:Mapped[str]=mapped_column(String,primary_key=True); stream_id:Mapped[str]=mapped_column(ForeignKey("curriculum_streams.id",ondelete="CASCADE")); name:Mapped[str]=mapped_column(String); description:Mapped[str]=mapped_column(Text)
+class CurriculumSubject(Base):
+    __tablename__="curriculum_subjects"; id:Mapped[str]=mapped_column(String,primary_key=True); combination_id:Mapped[str]=mapped_column(ForeignKey("curriculum_combinations.id",ondelete="CASCADE")); name:Mapped[str]=mapped_column(String); code:Mapped[str]=mapped_column(String); is_compulsory:Mapped[bool]=mapped_column(Boolean,default=False)
+class UserRole(str,enum.Enum): student="student"; teacher="teacher"; management="management"; admin="admin"
+class Verification(str,enum.Enum): pending="pending"; verified="verified"; rejected="rejected"
+class MembershipStatus(str,enum.Enum): pending="pending"; approved="approved"; rejected="rejected"
+class MaterialTier(str,enum.Enum): official="official"; administration="administration"; teacher="teacher"; student="student"; unverified="unverified"
+class MaterialStatus(str,enum.Enum): pending="pending"; extracting="extracting"; embedding="embedding"; verified="verified"; completed="completed"; failed="failed"; rejected="rejected"; archived="archived"
+class User(Base):
+    __tablename__="users"; id:Mapped[str]=mapped_column(String,primary_key=True,default=uid); email:Mapped[str]=mapped_column(String(320),unique=True,index=True); hashed_password:Mapped[str]=mapped_column(String); name:Mapped[str]=mapped_column(String); role:Mapped[UserRole]=mapped_column(Enum(UserRole)); verification_status:Mapped[Verification]=mapped_column(Enum(Verification),default=Verification.verified); is_active:Mapped[bool]=mapped_column(Boolean,default=True); created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=now)
+    academic_profile=relationship("AcademicProfile",back_populates="user",uselist=False,cascade="all, delete-orphan")
+class AcademicProfile(Base):
+    __tablename__="academic_profiles"; id:Mapped[str]=mapped_column(String,primary_key=True,default=uid); user_id:Mapped[str]=mapped_column(ForeignKey("users.id",ondelete="CASCADE"),unique=True); board_id:Mapped[str]=mapped_column(String); board_name:Mapped[str]=mapped_column(String); class_level:Mapped[int]=mapped_column(Integer); stream_id:Mapped[str]=mapped_column(String); stream_name:Mapped[str]=mapped_column(String); combination_id:Mapped[str]=mapped_column(String); combination_name:Mapped[str]=mapped_column(String); subjects:Mapped[list]=mapped_column(JSON); roll_number:Mapped[str]=mapped_column(String); user=relationship("User",back_populates="academic_profile"); __table_args__=(UniqueConstraint("board_id","class_level","roll_number"),)
+class Class(Base):
+    __tablename__="classes"; id:Mapped[str]=mapped_column(String,primary_key=True,default=uid); code:Mapped[str]=mapped_column(String(6),unique=True,index=True); name:Mapped[str]=mapped_column(String); board_id:Mapped[str]=mapped_column(String); class_level:Mapped[int]=mapped_column(Integer); rep_teacher_id:Mapped[str]=mapped_column(ForeignKey("users.id")); created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=now)
+class ClassMember(Base):
+    __tablename__="class_members"; id:Mapped[str]=mapped_column(String,primary_key=True,default=uid); class_id:Mapped[str]=mapped_column(ForeignKey("classes.id",ondelete="CASCADE")); student_id:Mapped[str]=mapped_column(ForeignKey("users.id",ondelete="CASCADE")); status:Mapped[MembershipStatus]=mapped_column(Enum(MembershipStatus),default=MembershipStatus.pending); requested_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=now); updated_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=now,onupdate=now); __table_args__=(UniqueConstraint("class_id","student_id"),)
+class ClassTeacher(Base):
+    __tablename__="class_teachers"; id:Mapped[str]=mapped_column(String,primary_key=True,default=uid); class_id:Mapped[str]=mapped_column(ForeignKey("classes.id",ondelete="CASCADE")); teacher_id:Mapped[str]=mapped_column(ForeignKey("users.id",ondelete="CASCADE")); subject_id:Mapped[str]=mapped_column(String); teacher_role:Mapped[str]=mapped_column(String,default="teacher"); __table_args__=(UniqueConstraint("class_id","teacher_id","subject_id"),)
+class Material(Base):
+    __tablename__="materials"; id:Mapped[str]=mapped_column(String,primary_key=True,default=uid); title:Mapped[str]=mapped_column(String); subject_id:Mapped[str]=mapped_column(String); chapter_id:Mapped[str|None]=mapped_column(String,nullable=True); file_path:Mapped[str]=mapped_column(String); type:Mapped[str]=mapped_column(String); source_tier:Mapped[MaterialTier]=mapped_column(Enum(MaterialTier)); status:Mapped[MaterialStatus]=mapped_column(Enum(MaterialStatus),default=MaterialStatus.pending); uploader_id:Mapped[str]=mapped_column(ForeignKey("users.id")); is_indexed_for_rag:Mapped[bool]=mapped_column(Boolean,default=False); created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=now)
+class ClassMaterial(Base):
+    __tablename__="class_materials"; id:Mapped[str]=mapped_column(String,primary_key=True,default=uid); class_id:Mapped[str]=mapped_column(ForeignKey("classes.id",ondelete="CASCADE")); material_id:Mapped[str]=mapped_column(ForeignKey("materials.id",ondelete="CASCADE")); assigned_by:Mapped[str]=mapped_column(ForeignKey("users.id")); assigned_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=now); is_class_private:Mapped[bool]=mapped_column(Boolean,default=True); __table_args__=(UniqueConstraint("class_id","material_id"),)
+class TutorSession(Base):
+    __tablename__="tutor_sessions"; id:Mapped[str]=mapped_column(String,primary_key=True,default=uid); user_id:Mapped[str]=mapped_column(ForeignKey("users.id",ondelete="CASCADE")); subject_id:Mapped[str]=mapped_column(String); title:Mapped[str]=mapped_column(String,default="New study session"); created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=now); updated_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=now,onupdate=now)
+class TutorMessage(Base):
+    __tablename__="tutor_messages"; id:Mapped[str]=mapped_column(String,primary_key=True,default=uid); session_id:Mapped[str]=mapped_column(ForeignKey("tutor_sessions.id",ondelete="CASCADE")); role:Mapped[str]=mapped_column(String); content:Mapped[str]=mapped_column(Text); sources:Mapped[list|None]=mapped_column(JSON,nullable=True); response_blocks:Mapped[list|None]=mapped_column(JSON,nullable=True); model_name:Mapped[str|None]=mapped_column(String,nullable=True); prompt_tokens:Mapped[int|None]=mapped_column(Integer,nullable=True); completion_tokens:Mapped[int|None]=mapped_column(Integer,nullable=True); total_tokens:Mapped[int|None]=mapped_column(Integer,nullable=True); latency_ms:Mapped[int|None]=mapped_column(Integer,nullable=True); created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=now)
